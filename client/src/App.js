@@ -10,7 +10,7 @@ import getWeb3 from "./getWeb3";
 import "./App.css";
 
 class App extends Component {
-  state = { loaded: false };
+  state = { loaded: false, kycAddress: "0x123...", tokenSaleAddress: "", userTokens: 0 };
 
   componentDidMount = async () => {
     try {
@@ -37,8 +37,9 @@ class App extends Component {
       KycContract.abi,
       KycContract.networks[this.networkId] && KycContract.networks[this.networkId].address,
     );
-     
-    this.setState({ loaded:true });
+
+    this.listenToTokenTransfer();
+    this.setState({ loaded:true, tokenSaleAddress:this.myTokenSale._address}, this.updateUserTokens);
 
   } catch (error) {
     // Catch any errors for any of the above operations.
@@ -50,23 +51,51 @@ class App extends Component {
   
   };
 
+  updateUserTokens = async() => {
+    let userTokens = await this.myToken.methods.balanceOf(this.accounts[0]).call();
+    this.setState({userTokens: userTokens});
+  }
+
+  listenToTokenTransfer = async() => {
+    this.myToken.events.Transfer({to: this.accounts[0]}).on("data", this.updateUserTokens);
+  }
+
+  handleBuyToken = async () => {
+    await this.myTokenSale.methods.buyTokens(this.accounts[0]).send({from: this.accounts[0], value: 1});
+  }
+
+  handleInputChange = (event) => {
+    const target = event.target;
+    const value = target.type === "checkbox" ? target.checked : target.value;
+    const name = target.name;
+    this.setState({
+      [name]: value
+    });
+  }
+
+  handleKycSubmit = async () => {
+    const {kycAddress} = this.state;
+    await this.kycContract.methods.setKycCompleted(kycAddress).send({from: this.accounts[0]});
+    alert("Account "+kycAddress+" is now whitelisted");
+  }
+
   render() {
     if (!this.state.loaded) {
       return <div>Loading Web3, accounts, and contract...</div>;
     }
     return (
       <div className="App">
-        <h1>Good to Go!</h1>
-        <p>Your Truffle Box is installed and ready.</p>
-        <h2>Smart Contract Example</h2>
-        <p>
-          If your contracts compiled and migrated successfully, below will show
-          a stored value of 5 (by default).
-        </p>
-        <p>
-          Try changing the value stored on <strong>line 40</strong> of App.js.
-        </p>
-        <div>The stored value is: {this.state.storageValue}</div>
+        <h1>Capuccino Token for StarDucks</h1>
+
+        <h2>Enable your account</h2>
+        Address to allow: <input type="text" name="kycAddress" value={this.state.kycAddress} onChange={this.handleInputChange} />
+        <button type="button" onClick={this.handleKycSubmit}>Add Address to Whitelist</button>
+
+        <h2>Buy Tokens</h2>
+        <p>If you want to buy tokens then send Wei to this address: {this.state.tokenSaleAddress}</p>
+        <p>You currently have: {this.state.userTokens} CAPPU tokens!</p>
+        <button type="button" onClick={this.handleBuyToken}>Buy More Tokens!</button>
+
       </div>
     );
   }
